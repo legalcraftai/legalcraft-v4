@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Legal Craft AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --bg:#212121;--sidebar:#171717;--surface:#2f2f2f;
+      --border:#3f3f3f;--text:#ececec;--muted:#8e8ea0;
+      --green:#10a37f;--green2:#0d8f6f;
+    }
+    html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);}
+    .app{display:flex;height:100vh;}
+
+    /* SIDEBAR */
+    .sidebar{width:260px;background:var(--sidebar);display:flex;flex-direction:column;padding:8px;flex-shrink:0;}
+    .new-btn{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);color:var(--text);font-size:13px;cursor:pointer;background:none;width:100%;margin-bottom:10px;font-family:'Inter',sans-serif;font-weight:500;transition:background 0.15s;}
+    .new-btn:hover{background:rgba(255,255,255,0.05);}
+    .new-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;}
+    .s-label{font-size:10px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;padding:10px 12px 5px;}
+    .s-item{padding:7px 12px;border-radius:8px;font-size:12.5px;color:var(--muted);cursor:pointer;transition:all 0.15s;margin:1px 0;line-height:1.4;}
+    .s-item:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+    .sidebar-bottom{margin-top:auto;border-top:1px solid var(--border);padding-top:8px;}
+    .lang-sel{width:100%;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;outline:none;}
+    .lang-sel option{background:#171717;}
+
+    /* MAIN */
+    .main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+    .topbar{display:flex;align-items:center;justify-content:center;padding:13px;border-bottom:1px solid var(--border);flex-shrink:0;position:relative;}
+    .app-title{font-size:15px;font-weight:600;}
+    .app-sub{position:absolute;right:16px;font-size:10px;background:rgba(16,163,127,0.12);color:var(--green);border:1px solid rgba(16,163,127,0.25);padding:3px 10px;border-radius:20px;}
+
+    /* CHAT */
+    .chat-scroll{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+    .chat-scroll::-webkit-scrollbar{width:4px;}
+    .chat-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+    /* WELCOME */
+    .welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:20px;padding:30px 20px;text-align:center;}
+    .w-logo{width:52px;height:52px;background:var(--green);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto;}
+    .w-logo svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:1.8;}
+    .w-title{font-size:24px;font-weight:600;}
+    .w-sub{font-size:13.5px;color:var(--muted);max-width:380px;line-height:1.75;}
+    .w-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:100%;max-width:500px;}
+    .w-card{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;text-align:left;transition:all 0.2s;font-size:12.5px;color:var(--muted);line-height:1.5;}
+    .w-card:hover{border-color:rgba(16,163,127,0.4);color:var(--text);background:rgba(16,163,127,0.05);}
+    .w-card h4{font-size:13px;font-weight:500;color:var(--text);margin-bottom:5px;}
+
+    /* MESSAGES */
+    .msg-row{padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.03);}
+    .msg-row.user{background:rgba(255,255,255,0.02);}
+    .msg-inner{max-width:720px;margin:0 auto;padding:0 20px;display:flex;gap:14px;align-items:flex-start;}
+    .av{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:2px;}
+    .av.ai{background:var(--green);}
+    .av.user{background:#7c3aed;}
+    .msg-body{flex:1;font-size:14px;line-height:1.8;color:var(--text);}
+    .msg-body p{margin:5px 0;}
+    .msg-body h3{font-size:15px;font-weight:600;margin:14px 0 6px;color:#fff;}
+    .msg-body h3:first-child{margin-top:0;}
+    .msg-body ul,.msg-body ol{padding-left:20px;margin:8px 0;}
+    .msg-body li{margin:4px 0;color:#d4d4d4;}
+    .msg-body strong{font-weight:600;color:#fff;}
+    .msg-body code{background:#1a1a1a;padding:2px 7px;border-radius:4px;font-size:12px;font-family:'Courier New',monospace;color:var(--green);}
+
+    /* DRAFT */
+    .draft-doc{background:#111;border:1px solid #333;border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:20px 22px;margin:14px 0;font-size:13px;line-height:2.1;color:#d0d0d0;font-family:'Courier New',monospace;white-space:pre-wrap;word-break:break-word;}
+    .draft-actions{display:flex;gap:8px;margin-top:10px;}
+    .draft-btn{padding:6px 14px;border-radius:7px;font-size:12px;border:1px solid var(--border);color:var(--muted);background:none;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s;}
+    .draft-btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+    .draft-btn.primary{background:var(--green);color:#fff;border-color:var(--green);}
+    .draft-btn.primary:hover{background:var(--green2);}
+
+    /* SECTION BOX */
+    .sec-box{background:#111820;border:1px solid rgba(16,163,127,0.2);border-radius:10px;padding:14px 16px;margin:10px 0;}
+    .sec-tag{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--green);margin-bottom:6px;}
+    .sec-text{font-size:13px;color:#b0b8c0;line-height:1.7;font-style:italic;border-left:2px solid var(--green);padding-left:12px;margin:8px 0;}
+
+    /* SOURCES */
+    .sources{margin-top:14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+    .src-h{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;font-weight:500;}
+    .src-row{display:flex;align-items:flex-start;gap:8px;margin:5px 0;}
+    .src-dot{width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0;margin-top:7px;}
+    .src-link{font-size:12px;color:var(--green);text-decoration:none;line-height:1.5;}
+    .src-link:hover{text-decoration:underline;}
+
+    /* LOADING */
+    .dots{display:flex;gap:5px;padding:4px 0;}
+    .dot{width:7px;height:7px;border-radius:50%;background:var(--green);opacity:0.3;animation:pulse 1.3s ease-in-out infinite;}
+    .dot:nth-child(2){animation-delay:0.2s;}
+    .dot:nth-child(3){animation-delay:0.4s;}
+    @keyframes pulse{0%,100%{opacity:0.25;transform:scale(0.8);}50%{opacity:1;transform:scale(1.1);}}
+
+    /* INPUT */
+    .input-area{padding:14px 20px 12px;flex-shrink:0;}
+    .input-box{max-width:720px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:14px;display:flex;align-items:flex-end;gap:10px;padding:12px 16px;transition:border-color 0.2s;}
+    .input-box:focus-within{border-color:rgba(16,163,127,0.4);}
+    .chat-in{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:'Inter',sans-serif;font-size:14px;resize:none;min-height:24px;max-height:160px;line-height:1.6;}
+    .chat-in::placeholder{color:var(--muted);}
+    .send{width:34px;height:34px;border-radius:8px;background:var(--green);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;}
+    .send:hover{background:var(--green2);}
+    .send:disabled{opacity:0.3;cursor:not-allowed;}
+    .send svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2.2;}
+    .input-note{max-width:720px;margin:8px auto 0;text-align:center;font-size:11px;color:var(--muted);}
+
+    @media(max-width:768px){.sidebar{display:none;}.w-grid{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <button class="new-btn" onclick="newChat()">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New Chat
+    </button>
+
+    <div class="s-label">Draft Karo</div>
+    <div class="s-item" onclick="ask('Bail application draft karo Section 483 BNSS — accused naam: , court: , FIR number: , offence: ')">📄 Bail Application (S.483)</div>
+    <div class="s-item" onclick="ask('Anticipatory bail application draft karo Section 482 BNSS — applicant naam: , court: , reason: ')">🔒 Anticipatory Bail (S.482)</div>
+    <div class="s-item" onclick="ask('FIR complaint draft karo — complainant naam: , incident date: , place: , kya hua: ')">📋 FIR / Complaint (S.173)</div>
+    <div class="s-item" onclick="ask('Legal notice draft karo Section 138 NI Act — cheque number: , amount: Rs., dishonour date: , naam: ')">⚖️ Legal Notice S.138</div>
+    <div class="s-item" onclick="ask('Quashing petition draft karo Section 528 BNSS — FIR number: , police station: , grounds: ')">❌ Quashing Petition (S.528)</div>
+    <div class="s-item" onclick="ask('Divorce petition draft karo Section 13 HMA — petitioner naam: , marriage date: , grounds: cruelty')">💔 Divorce Petition (S.13 HMA)</div>
+    <div class="s-item" onclick="ask('Maintenance application draft karo Section 144 BNSS — applicant naam: , respondent income: Rs.')">💰 Maintenance (S.144 BNSS)</div>
+    <div class="s-item" onclick="ask('Sale deed draft karo — vendor naam: , purchaser naam: , property: , amount: Rs.')">🏠 Sale Deed (S.54 TPA)</div>
+    <div class="s-item" onclick="ask('Consumer complaint draft karo — product: , company: , amount paid: Rs., defect: ')">🛒 Consumer Complaint</div>
+    <div class="s-item" onclick="ask('RTI application draft karo — department: , information chahiye: , time period: ')">📋 RTI Application</div>
+    <div class="s-item" onclick="ask('PIL draft karo Article 226 — issue: , affected class: , prayer: ')">🏛️ PIL (Article 226)</div>
+    <div class="s-item" onclick="ask('Vakalatnama draft karo — client naam: , court: , case number: ')">📝 Vakalatnama</div>
+
+    <div class="s-label">Research Karo</div>
+    <div class="s-item" onclick="ask('BNS Section 103 kya hai — murder ka section — explain karo leading cases ke saath')">⚖️ BNS S.103 — Murder</div>
+    <div class="s-item" onclick="ask('BNS Section 318 kya hai — cheating fraud ka section — explain karo')">🔍 BNS S.318 — Cheating</div>
+    <div class="s-item" onclick="ask('BNSS Section 482 kya hai — anticipatory bail — leading cases batao')">🔒 BNSS S.482 — Ant. Bail</div>
+    <div class="s-item" onclick="ask('Article 21 Right to Life explain karo — leading cases ke saath')">📚 Article 21 — Right to Life</div>
+    <div class="s-item" onclick="ask('Kesavananda Bharati case explain karo — facts aur judgment')">🏛️ Kesavananda Bharati Case</div>
+    <div class="s-item" onclick="ask('Section 138 NI Act explain karo — cheque bounce — leading cases')">💰 S.138 NI Act — Cheque</div>
+
+    <div class="sidebar-bottom">
+      <div class="s-label">Language / भाषा</div>
+      <select class="lang-sel" id="langSel" onchange="setLang(this.value)">
+        <option value="English">English</option>
+        <option value="Hindi">हिंदी</option>
+        <option value="Marathi">मराठी</option>
+        <option value="Bengali">বাংলা</option>
+        <option value="Telugu">తెలుగు</option>
+        <option value="Tamil">தமிழ்</option>
+        <option value="Gujarati">ગુજરાતી</option>
+        <option value="Kannada">ಕನ್ನಡ</option>
+        <option value="Malayalam">മലയാളം</option>
+        <option value="Punjabi">ਪੰਜਾਬੀ</option>
+        <option value="Urdu">اردو</option>
+        <option value="Odia">ଓଡ଼ିଆ</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <span class="app-title">Legal Craft AI</span>
+      <span class="app-sub">V4 · Verified Sections · Official Templates</span>
+    </div>
+
+    <div class="chat-scroll" id="chatScroll">
+      <div class="welcome" id="welcome">
+        <div class="w-logo">
+          <svg viewBox="0 0 24 24"><path d="M12 3L4 7v10l8 4 8-4V7L12 3z"/><path d="M12 3v18M4 7l8 4 8-4"/></svg>
+        </div>
+        <div class="w-title">Legal Craft AI</div>
+        <div class="w-sub">Koi bhi document draft karein ya case research karein — verified sections, official templates, authenticated sources.</div>
+        <div class="w-grid">
+          <div class="w-card" onclick="ask('Bail application draft karo Section 483 BNSS — accused naam: Ram Kumar, court: Sessions Court Varanasi, FIR: 123/2024, offence: cheating')">
+            <h4>📄 Document Draft</h4>Bail, FIR, Notice, Petition — official court format mein
+          </div>
+          <div class="w-card" onclick="ask('Kesavananda Bharati case explain karo — facts, arguments, judgment aur impact simple language mein')">
+            <h4>🏛️ Case Research</h4>SC & HC judgements — facts, ratio, impact clearly
+          </div>
+          <div class="w-card" onclick="ask('BNS 2023 Section 103 murder ka section explain karo — leading cases ke saath')">
+            <h4>📚 Section Explain</h4>BNS, BNSS, BSA, Constitution — verified text + cases
+          </div>
+          <div class="w-card" onclick="ask('Mere client ka cheque bounce hua hai — kya process hai legal notice se court tak?')">
+            <h4>💬 Legal Query</h4>Koi bhi legal sawaal — step by step jawab
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-box">
+        <textarea class="chat-in" id="chatIn"
+          placeholder="Section poochein, case dhundein, ya document draft karwayein — details de kar..."
+          rows="1"
+          onkeydown="onKey(event)"
+          oninput="resize(this)"></textarea>
+        <button class="send" id="sendBtn" onclick="send()">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
+      <div class="input-note">Legal Craft AI V4 · BNS/BNSS/BSA 2023 Verified · 15+ Acts · Official Court Templates · Real-time Web Verified</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let msgs=[], lang='English', busy=false;
+
+function setLang(l){lang=l;}
+
+function ask(q){
+  document.getElementById('chatIn').value=q;
+  resize(document.getElementById('chatIn'));
+  send();
+}
+
+function newChat(){
+  msgs=[];
+  const sc=document.getElementById('chatScroll');
+  sc.innerHTML='';
+  const w=document.createElement('div');
+  w.className='welcome';w.id='welcome';
+  w.innerHTML=`<div class="w-logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M12 3L4 7v10l8 4 8-4V7L12 3z"/><path d="M12 3v18M4 7l8 4 8-4"/></svg></div><div class="w-title">Legal Craft AI</div><div class="w-sub">Naya sawaal poochein ya document draft karwayein.</div>`;
+  sc.appendChild(w);
+}
+
+function onKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}
+
+function resize(el){
+  el.style.height='auto';
+  el.style.height=Math.min(el.scrollHeight,160)+'px';
+}
+
+function rmWelcome(){const w=document.getElementById('welcome');if(w)w.remove();}
+
+function addUserMsg(text){
+  rmWelcome();
+  const sc=document.getElementById('chatScroll');
+  const row=document.createElement('div');
+  row.className='msg-row user';
+  row.innerHTML=`<div class="msg-inner"><div class="av user">U</div><div class="msg-body"><p>${esc(text).replace(/\n/g,'<br>')}</p></div></div>`;
+  sc.appendChild(row);
+  sc.scrollTop=sc.scrollHeight;
+}
+
+function addAiMsg(){
+  const sc=document.getElementById('chatScroll');
+  const row=document.createElement('div');
+  row.className='msg-row ai';
+  const inner=document.createElement('div');inner.className='msg-inner';
+  const av=document.createElement('div');av.className='av ai';av.textContent='LC';
+  const body=document.createElement('div');body.className='msg-body';
+  body.innerHTML='<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+  inner.appendChild(av);inner.appendChild(body);
+  row.appendChild(inner);sc.appendChild(row);
+  sc.scrollTop=sc.scrollHeight;
+  return body;
+}
+
+function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function copyDraft(id){
+  const el=document.getElementById(id);
+  if(el){navigator.clipboard.writeText(el.innerText).then(()=>alert('Draft copied!'));}
+}
+
+function fmt(text,sources,intent){
+  // Extract draft
+  let draftHtml='';
+  const draftId='draft_'+Date.now();
+  const m=text.match(/---DRAFT START---([\s\S]*?)---DRAFT END---/);
+  if(m){
+    const draftContent=m[1].trim();
+    draftHtml=`<div class="draft-doc" id="${draftId}">${esc(draftContent)}</div>
+    <div class="draft-actions">
+      <button class="draft-btn primary" onclick="copyDraft('${draftId}')">📋 Copy Draft</button>
+      <button class="draft-btn" onclick="window.print()">🖨️ Print</button>
+    </div>`;
+    text=text.replace(/---DRAFT START---[\s\S]*?---DRAFT END---/,'__DRAFT__');
+  }
+
+  let html=text
+    .replace(/===(.+?)===/g,'<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/__DRAFT__/,draftHtml)
+    .split('\n\n').map(p=>{
+      if(!p.trim())return'';
+      if(p.startsWith('<'))return p;
+      if(p.startsWith('- ')||p.startsWith('* ')){
+        return'<ul>'+p.split('\n').filter(l=>l.trim()).map(l=>`<li>${l.replace(/^[-*]\s*/,'')}</li>`).join('')+'</ul>';
+      }
+      if(/^\d+\./.test(p)){
+        return'<ol>'+p.split('\n').filter(l=>l.trim()).map(l=>`<li>${l.replace(/^\d+\.\s*/,'')}</li>`).join('')+'</ol>';
+      }
+      return`<p>${p.replace(/\n/g,'<br>')}</p>`;
+    }).join('');
+
+  if(sources&&sources.length>0){
+    html+=`<div class="sources"><div class="src-h">📚 Verified Sources</div>${
+      sources.map(s=>`<div class="src-row"><div class="src-dot"></div><a class="src-link" href="${s.url}" target="_blank" rel="noopener">${s.title}</a></div>`).join('')
+    }</div>`;
+  }
+  return html;
+}
+
+async function send(){
+  if(busy)return;
+  const inp=document.getElementById('chatIn');
+  const text=inp.value.trim();
+  if(!text)return;
+  inp.value='';inp.style.height='auto';
+
+  addUserMsg(text);
+  const langPrefix=lang!=='English'?`[Respond in ${lang}] `:'';
+  msgs.push({role:'user',content:langPrefix+text});
+
+  busy=true;
+  document.getElementById('sendBtn').disabled=true;
+
+  const aiBody=addAiMsg();
+
+  try{
+    const res=await fetch('/api/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages:msgs,language:lang}),
+    });
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    const reply=data.reply||'Response generate nahi ho saka.';
+    aiBody.innerHTML=fmt(reply,data.sources,data.intent);
+    msgs.push({role:'assistant',content:reply});
+  }catch(err){
+    aiBody.innerHTML='<p style="color:#f87171;">Connection error. Please try again.</p>';
+    console.error(err);
+  }
+
+  busy=false;
+  document.getElementById('sendBtn').disabled=false;
+  document.getElementById('chatScroll').scrollTop=99999;
+}
+</script>
+</body>
+</html>
