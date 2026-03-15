@@ -1,7 +1,7 @@
-import { findSection, detectIntent } from './data/acts.js';
-import { findTemplate, extractFields, TEMPLATES } from './data/templates.js';
+const { findSection, detectIntent } = require('./data/acts.js');
+const { findTemplate, extractFields } = require('./data/templates.js');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -18,8 +18,8 @@ export default async function handler(req, res) {
     const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
     const COHERE_API_KEY = process.env.COHERE_API_KEY;
 
-    if (!GROQ_API_KEY || !TAVILY_API_KEY || !COHERE_API_KEY) {
-      return res.status(500).json({ error: 'API keys not configured.' });
+    if (!GROQ_API_KEY) {
+      return res.status(500).json({ error: 'GROQ API key not configured.' });
     }
 
     const userQuery = messages[messages.length - 1]?.content || '';
@@ -27,24 +27,19 @@ export default async function handler(req, res) {
       ? `IMPORTANT: Respond entirely in ${language}. Keep legal terms accurate.`
       : '';
 
-    // ============================================================
-    // STEP 1 — SMART INTENT DETECTION
-    // ============================================================
+    // STEP 1 — INTENT DETECTION
     const intent = detectIntent(userQuery);
 
-    // ============================================================
-    // STEP 2A — IF DRAFT: Find template + extract fields
-    // ============================================================
+    // STEP 2 — LOCAL DATABASE SEARCH
     let templateData = null;
-    let extractedFields = {};
     let templateText = '';
+    let extractedFields = {};
 
     if (intent === 'DRAFT') {
       const found = findTemplate(userQuery);
       if (found) {
         templateData = found.template;
         extractedFields = extractFields(userQuery);
-        // Generate template with extracted fields
         try {
           templateText = found.template.template(extractedFields);
         } catch(e) {
@@ -53,83 +48,61 @@ export default async function handler(req, res) {
       }
     }
 
-    // ============================================================
-    // STEP 2B — SECTION/CASE: Find from database
-    // ============================================================
-    let localResult = { sections: [], cases: [] };
-    if (intent === 'SECTION' || intent === 'CASE' || intent === 'GENERAL') {
-      localResult = findSection(userQuery);
-    }
-
-    const localSectionText = localResult.sections.map(s =>
-      `${s.type === 'article' ? 'ARTICLE' : 'SECTION'} ${s.number} — ${s.act}:\nTitle: ${s.title}\nText: ${s.text}${s.ipc ? `\n(Old equivalent: ${s.ipc})` : ''}`
+    const localResult = findSection(userQuery);
+    const localSectionText = (localResult.sections || []).map(s =>
+      `${s.type === 'article' ? 'ARTICLE' : 'SECTION'} ${s.number} — ${s.act}:\nTitle: ${s.title}\nText: ${s.text}${s.ipc ? `\n(Old: ${s.ipc})` : ''}`
     ).join('\n\n---\n\n');
 
-    const localCasesText = localResult.cases.map(c =>
-      `LEADING CASE: ${c.name}\nCitation: ${c.citation}\nFacts: ${c.facts}\nHeld: ${c.held}\nImportance: ${c.importance}`
+    const localCasesText = (localResult.cases || []).map(c =>
+      `CASE: ${c.name}\nCitation: ${c.citation}\nFacts: ${c.facts}\nHeld: ${c.held}`
     ).join('\n\n---\n\n');
 
-    // ============================================================
     // STEP 3 — TAVILY WEB SEARCH
-    // ============================================================
     let webData = '';
     let sources = [];
 
-    try {
-      let searchQuery = '';
-      if (intent === 'DRAFT') {
-        searchQuery = `${templateData?.name || userQuery} official format Indian court BNS BNSS 2023`;
-      } else if (intent === 'SECTION') {
-        searchQuery = `${userQuery} Indian law section explanation leading cases indiankanoon`;
-      } else if (intent === 'CASE') {
-        searchQuery = `${userQuery} India Supreme Court High Court judgment`;
-      } else {
-        searchQuery = `${userQuery} Indian law BNS 2023`;
-      }
+    if (TAVILY_API_KEY) {
+      try {
+        let searchQuery = intent === 'DRAFT'
+          ? `${templateData?.name || userQuery} official format Indian court BNS BNSS 2023`
+          : intent === 'SECTION'
+          ? `${userQuery} Indian law section explanation leading cases indiankanoon`
+          : intent === 'CASE'
+          ? `${userQuery} India Supreme Court judgment indiankanoon`
+          : `${userQuery} Indian law BNS 2023`;
 
-      const tavilyRes = await fetch('https://api.tavily.com/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          api_key: TAVILY_API_KEY,
-          query: searchQuery,
-          search_depth: 'advanced',
-          max_results: 8,
-          include_answer: true,
-          include_domains: [
-            'indiankanoon.org',
-            'sci.gov.in',
-            'ecourts.gov.in',
-            'legislative.gov.in',
-            'indiacode.nic.in',
-            'barandbench.com',
-            'livelaw.in',
-            'scobserver.in',
-            'lawrato.com',
-            'barcouncilofindia.org',
-          ],
-        }),
-      });
+        const tavilyRes = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: TAVILY_API_KEY,
+            query: searchQuery,
+            search_depth: 'advanced',
+            max_results: 6,
+            include_answer: true,
+            include_domains: [
+              'indiankanoon.org', 'sci.gov.in', 'ecourts.gov.in',
+              'legislative.gov.in', 'indiacode.nic.in',
+              'barandbench.com', 'livelaw.in',
+            ],
+          }),
+        });
 
-      if (tavilyRes.ok) {
-        const tavilyData = await tavilyRes.json();
-        sources = (tavilyData.results || []).slice(0, 6).map(r => ({
-          title: r.title,
-          url: r.url,
-          snippet: r.content?.slice(0, 400),
-        }));
-        webData = sources.map(s => `SOURCE: ${s.title}\nURL: ${s.url}\nCONTENT: ${s.snippet}`).join('\n\n');
-        if (tavilyData.answer) webData = `WEB SUMMARY: ${tavilyData.answer}\n\n` + webData;
+        if (tavilyRes.ok) {
+          const tavilyData = await tavilyRes.json();
+          sources = (tavilyData.results || []).slice(0, 5).map(r => ({
+            title: r.title, url: r.url, snippet: r.content?.slice(0, 350),
+          }));
+          webData = sources.map(s => `SOURCE: ${s.title}\nURL: ${s.url}\nCONTENT: ${s.snippet}`).join('\n\n');
+          if (tavilyData.answer) webData = `WEB SUMMARY: ${tavilyData.answer}\n\n` + webData;
+        }
+      } catch(e) {
+        console.error('Tavily error:', e.message);
       }
-    } catch (e) {
-      console.error('Tavily error:', e.message);
     }
 
-    // ============================================================
     // STEP 4 — COHERE RERANK
-    // ============================================================
-    let verifiedData = webData;
-    if (sources.length > 2) {
+    if (COHERE_API_KEY && sources.length > 2) {
       try {
         const cohereRes = await fetch('https://api.cohere.com/v1/rerank', {
           method: 'POST',
@@ -144,191 +117,103 @@ export default async function handler(req, res) {
             top_n: 4,
           }),
         });
-
         if (cohereRes.ok) {
           const cohereData = await cohereRes.json();
           const reranked = (cohereData.results || [])
             .sort((a, b) => b.relevance_score - a.relevance_score)
-            .map(r => sources[r.index])
-            .filter(Boolean);
+            .map(r => sources[r.index]).filter(Boolean);
           if (reranked.length > 0) {
             sources = reranked;
-            verifiedData = reranked.map(s =>
-              `SOURCE: ${s.title}\nURL: ${s.url}\nCONTENT: ${s.snippet}`
-            ).join('\n\n');
+            webData = reranked.map(s => `SOURCE: ${s.title}\nURL: ${s.url}\nCONTENT: ${s.snippet}`).join('\n\n');
           }
         }
-      } catch (e) {
+      } catch(e) {
         console.error('Cohere error:', e.message);
       }
     }
 
-    // ============================================================
-    // STEP 5 — BUILD SYSTEM PROMPT BASED ON INTENT
-    // ============================================================
+    // STEP 5 — BUILD SYSTEM PROMPT
     let systemPrompt = '';
 
     if (intent === 'DRAFT') {
-      const missingFields = templateData?.requiredFields?.filter(f => !extractedFields[f]) || [];
-
       systemPrompt = `You are Legal Craft AI — India's expert legal document drafting system.
 
-${templateData ? `DOCUMENT TYPE: ${templateData.name}
-COURT: ${templateData.court || 'As applicable'}` : 'TASK: Draft the legal document requested.'}
+${templateData ? `DOCUMENT: ${templateData.name}` : 'TASK: Draft the legal document requested.'}
 
-${templateText ? `
-PRE-FILLED TEMPLATE (Use this as base — fill remaining blanks with user details):
+${templateText ? `PRE-FILLED TEMPLATE (Use as base — fill remaining blanks):
 ---DRAFT START---
 ${templateText}
----DRAFT END---
-` : ''}
+---DRAFT END---` : ''}
 
-${missingFields.length > 0 ? `
-MISSING INFORMATION: The following details were not provided by user:
-${missingFields.join(', ')}
+RULES:
+1. Use official Indian court format
+2. Use BNS 2023 / BNSS 2023 / BSA 2023 sections (NOT old IPC/CrPC)
+3. Fill all details user provided
+4. Use [PLACEHOLDER] for missing info
+5. Keep formal legal language
+6. Start with ---DRAFT START--- end with ---DRAFT END---
+7. After draft — list what placeholders user needs to fill
 
-For missing fields: Use [FIELD NAME] placeholder and tell user to fill these.
-` : ''}
-
-DRAFTING RULES (STRICTLY FOLLOW):
-1. Use the pre-filled template above as base
-2. All BNS 2023 / BNSS 2023 / BSA 2023 sections are already correct in template
-3. Fill all details user has provided
-4. Use [PLACEHOLDER] for missing information
-5. Do NOT change the court format structure
-6. Keep formal legal language
-7. Start document with ---DRAFT START--- and end with ---DRAFT END---
-8. After draft — list what information user needs to fill in [PLACEHOLDERS]
-
-WEB VERIFIED DATA (for additional clauses if needed):
-${verifiedData || 'Use template as primary source'}
-
+WEB DATA: ${webData || 'Use template as primary source'}
 ${langNote}`;
 
     } else if (intent === 'SECTION') {
       systemPrompt = `You are Legal Craft AI — India's legal section explanation system.
 
-TASK: Explain the section/article asked by user.
+VERIFIED SECTION DATA:
+${localSectionText || 'Not in database — use web data'}
 
-VERIFIED SECTION DATA FROM DATABASE:
-${localSectionText || 'Not found in database — use web data'}
+LEADING CASES:
+${localCasesText || 'Use web data'}
 
-LEADING CASES FROM DATABASE:
-${localCasesText || 'Search web data for cases'}
+WEB DATA: ${webData || 'Use database'}
 
-WEB VERIFIED DATA:
-${verifiedData || 'Use database as primary source'}
+RESPONSE FORMAT:
+1. SECTION DETAILS — exact number, act name, old equivalent
+2. SECTION TEXT — exact text
+3. SIMPLE EXPLANATION — plain language, who it applies to, consequences
+4. LEADING CASES (2-3) — case name, citation, facts (simple), what court decided, why important
+5. KEY POINTS TO REMEMBER
 
-RESPONSE FORMAT (Always follow):
-1. SECTION/ARTICLE DETAILS
-   - Exact number and Act name
-   - Old equivalent (IPC/CrPC) if applicable
-   - Exact text of section
-
-2. SIMPLE EXPLANATION
-   - What this section means in plain language
-   - Who does it apply to
-   - What are consequences/punishment
-   - When it applies
-
-3. LEADING CASES (2-3 most important)
-   For each case:
-   - Case name and citation
-   - Facts in 3-4 simple sentences
-   - What court decided — in simple words
-   - Why important
-
-4. IMPORTANT POINTS TO REMEMBER
-   - Key things advocate/student must know
-   - Common mistakes to avoid
-
-RULES:
-- Never make up section numbers or case names
-- If section not found — say so clearly
-- Simple language — explain like teaching
-- Always mention old IPC/CrPC equivalent
-
+RULES: Never make up section numbers or case names. Simple language always.
 ${langNote}`;
 
     } else if (intent === 'CASE') {
       systemPrompt = `You are Legal Craft AI — India's case law research system.
 
-TASK: Research and explain the case asked by user.
-
-DATABASE CASES FOUND:
+DATABASE CASES:
 ${localCasesText || 'Not in database — use web data'}
 
-WEB VERIFIED DATA:
-${verifiedData || 'Use your legal knowledge'}
+WEB DATA: ${webData || 'Use your legal knowledge'}
 
-RESPONSE FORMAT (Always follow):
-1. CASE DETAILS
-   - Full case name
-   - Court and Year
-   - Citation (AIR / SCC / SCR)
-   - Bench (judges if known)
+RESPONSE FORMAT:
+1. CASE DETAILS — full name, court, year, citation
+2. BACKGROUND — who were parties, what was dispute
+3. FACTS — chronological, simple
+4. LEGAL ISSUES — which articles/sections
+5. ARGUMENTS — petitioner and respondent
+6. JUDGMENT — verdict in simple words, ratio decidendi
+7. IMPACT — why important, still good law?
 
-2. BACKGROUND
-   - Who were parties
-   - What was the dispute
-
-3. FACTS (Chronological)
-   - What happened step by step
-   - Key events with dates if known
-
-4. LEGAL ISSUES
-   - What legal questions arose
-   - Which articles/sections involved
-
-5. ARGUMENTS
-   - Petitioner's arguments
-   - Respondent's arguments
-
-6. JUDGMENT — WHAT COURT DECIDED
-   - Final verdict in simple words
-   - Key observations
-   - Ratio decidendi
-
-7. IMPACT
-   - Why this case is important
-   - How it changed Indian law
-   - Still good law or overruled?
-
-RULES:
-- NEVER make up facts
-- If not found — say so clearly
-- Simple language always
-- Give full citation
-
+RULES: Never make up facts. Simple language. Full citation always.
 ${langNote}`;
 
     } else {
       systemPrompt = `You are Legal Craft AI — India's comprehensive legal intelligence system.
 
-LOCAL DATABASE SECTIONS:
-${localSectionText || 'Not found'}
-
-LOCAL DATABASE CASES:
-${localCasesText || 'Not found'}
-
-WEB VERIFIED DATA:
-${verifiedData || 'Use your legal knowledge'}
+DATABASE: ${localSectionText || 'Not found'}
+CASES: ${localCasesText || 'Not found'}
+WEB DATA: ${webData || 'Use your legal knowledge'}
 
 RULES:
-1. Use BNS 2023, BNSS 2023, BSA 2023 — always prefer new laws
+1. Use BNS 2023, BNSS 2023, BSA 2023 always
 2. Simple clear language
-3. Show sources at end
-4. If answer not found — say clearly, do not guess
-5. For drafting queries — offer to draft
-6. For section queries — section text + explanation + cases
-7. For case queries — facts + judgment + impact
-
+3. Show sources
+4. Never guess — if not found say so clearly
 ${langNote}`;
     }
 
-    // ============================================================
-    // STEP 6 — GROQ FINAL RESPONSE
-    // ============================================================
+    // STEP 6 — GROQ RESPONSE
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -359,13 +244,10 @@ ${langNote}`;
       reply,
       intent,
       sources: sources.slice(0, 4),
-      templateFound: !!templateData,
-      sectionsFound: localResult.sections.length,
-      casesFound: localResult.cases.length,
     });
 
   } catch (error) {
     console.error('Server error:', error);
-    return res.status(500).json({ error: 'Server error. Please try again.' });
+    return res.status(500).json({ error: 'Server error: ' + error.message });
   }
-}
+};
